@@ -1,80 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Google Sheet Sync</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-        select { padding: 10px; font-size: 18px; margin: 10px; cursor: pointer; }
-        #status { margin-top: 20px; font-weight: bold; font-size: 16px; }
-        #mirror { font-size: 20px; color: #0066cc; margin-bottom: 20px; font-weight: bold; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real-Time Google Sheet Sync</title>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    text-align:center;
+    margin-top:60px;
+}
+
+select{
+    padding:10px;
+    font-size:18px;
+}
+
+#mirror{
+    font-size:22px;
+    font-weight:bold;
+    color:#0066cc;
+    margin-bottom:20px;
+}
+
+#status{
+    margin-top:20px;
+    font-weight:bold;
+}
+</style>
+
 </head>
 <body>
 
-    <h2>Real-Time Google Sheet Sync</h2>
-    
-    <div id="mirror">Current Status: Loading...</div>
+<h2>Google Sheet Sync</h2>
 
-    <!-- Dropdown changes instantly on selection -->
-    <select id="userSelection" onchange="sendUpdate()">
-        <option value="Option 1">Option 1</option>
-        <option value="Option 2">Option 2</option>
-    </select>
-    
-    <div id="status"></div>
+<div id="mirror">Loading...</div>
 
-    <script>
-        // Use your published Web App URL (ends in /exec) here:
-        const webAppUrl = "https://script.google.com/macros/s/YOUR_WEB_APP_ID_HERE/exec";
-        let isUpdatingLocally = false;
+<select id="userSelection">
+    <option value="Option 1">Option 1</option>
+    <option value="Option 2">Option 2</option>
+</select>
 
-        function sendUpdate() {
-            const selectedValue = document.getElementById('userSelection').value;
-            const statusDiv = document.getElementById('status');
-            const mirrorDiv = document.getElementById('mirror');
-            
-            isUpdatingLocally = true;
-            statusDiv.style.color = "black";
-            statusDiv.innerText = "Updating sheet...";
-            mirrorDiv.innerText = `Current Choice: ${selectedValue}`;
+<div id="status"></div>
 
-            const img = new Image();
-            img.src = `${webAppUrl}?value=${encodeURIComponent(selectedValue)}&t=${new Date().getTime()}`;
-            
-            img.onload = img.onerror = function() {
-                statusDiv.style.color = "green";
-                statusDiv.innerText = "Updated successfully!";
-                setTimeout(() => { statusDiv.innerText = ""; }, 2000);
-                setTimeout(() => { isUpdatingLocally = false; }, 1500);
-            };
+<script>
+
+const webAppUrl = "YOUR_WEB_APP_URL_HERE";
+
+const select = document.getElementById("userSelection");
+const mirror = document.getElementById("mirror");
+const status = document.getElementById("status");
+
+let updating = false;
+
+select.addEventListener("change", sendUpdate);
+
+async function sendUpdate(){
+
+    updating = true;
+
+    const value = select.value;
+
+    mirror.textContent = "Current Choice: " + value;
+    status.style.color = "black";
+    status.textContent = "Syncing...";
+
+    try{
+
+        const response = await fetch(
+            webAppUrl + "?value=" + encodeURIComponent(value)
+        );
+
+        const data = await response.json();
+
+        if(data.success){
+
+            status.style.color = "green";
+            status.textContent = "Synced";
+
+        }else{
+
+            status.style.color = "red";
+            status.textContent = "Failed";
+
         }
 
-        async function pollSheet() {
-            if (isUpdatingLocally) return;
+    }catch(e){
 
-            try {
-                const response = await fetch(`${webAppUrl}?t=${new Date().getTime()}`);
-                const data = await response.json();
-                
-                if (data && data.value) {
-                    const selectElement = document.getElementById('userSelection');
-                    const mirrorDiv = document.getElementById('mirror');
-                    
-                    if (selectElement.value !== data.value) {
-                        selectElement.value = data.value;
-                        mirrorDiv.innerText = `Current Choice: ${data.value}`;
-                    }
-                }
-            } catch (error) {
-                console.error("Polling error: ", error);
+        console.error(e);
+
+        status.style.color = "red";
+        status.textContent = "Connection Error";
+
+    }
+
+    setTimeout(()=>{
+        status.textContent="";
+        updating=false;
+    },1000);
+
+}
+
+async function pollSheet(){
+
+    if(updating) return;
+
+    try{
+
+        const response = await fetch(
+            webAppUrl + "?t=" + Date.now()
+        );
+
+        const data = await response.json();
+
+        if(data.success){
+
+            if(select.value !== data.value){
+
+                select.value = data.value;
+
             }
+
+            mirror.textContent = "Current Choice: " + data.value;
+
         }
 
-        pollSheet();
-        setInterval(pollSheet, 3000);
-    </script>
+    }catch(e){
+
+        console.log(e);
+
+    }
+
+}
+
+pollSheet();
+setInterval(pollSheet,1000);
+
+</script>
 
 </body>
 </html>
