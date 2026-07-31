@@ -12,22 +12,21 @@
     </style>
 </head>
 <body>
+
     <h2>Real-Time Google Sheet Sync</h2>
-    
+
     <div id="mirror">Current Status: Loading...</div>
-    
+
     <select id="userSelection" onchange="sendUpdate()">
         <option value="Option 1">Option 1</option>
         <option value="Option 2">Option 2</option>
     </select>
-    
+
     <div id="status"></div>
 
     <script>
-        // ========== PASTE YOUR NEW WEB APP URL HERE ==========
+        // Your Google Apps Script Web App URL (must end in /exec)
         const webAppUrl = "https://script.google.com/macros/s/AKfycbz2IvN6LPGUDhfsmDi_vTg0G77uqCqcFJ_k7Q6WC3EbDsKISHs8TozTxVkdp1UWB1_5Kw/exec";
-        // =====================================================
-
         let isUpdatingLocally = false;
 
         // 1. Send update to Google Sheet instantly when user changes dropdown
@@ -35,21 +34,29 @@
             const selectedValue = document.getElementById('userSelection').value;
             const statusDiv = document.getElementById('status');
             const mirrorDiv = document.getElementById('mirror');
-            
+
             isUpdatingLocally = true;
             statusDiv.style.color = "black";
             statusDiv.innerText = "Syncing with sheet...";
             mirrorDiv.innerText = `Current Choice: ${selectedValue}`;
 
             try {
-                await fetch(`${webAppUrl}?value=${encodeURIComponent(selectedValue)}`, { mode: 'no-cors' });
-                statusDiv.style.color = "green";
-                statusDiv.innerText = "Synced successfully!";
+                // NOTE: no-cors removed so we can actually detect failures.
+                // This requires the Apps Script doGet to return a JSON response.
+                const response = await fetch(`${webAppUrl}?value=${encodeURIComponent(selectedValue)}`);
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    statusDiv.style.color = "green";
+                    statusDiv.innerText = "Synced successfully!";
+                } else {
+                    throw new Error("Unexpected response: " + JSON.stringify(data));
+                }
                 setTimeout(() => { statusDiv.innerText = ""; }, 2000);
             } catch (error) {
                 statusDiv.style.color = "red";
-                statusDiv.innerText = "Sync failed.";
-                console.error(error);
+                statusDiv.innerText = "Sync failed. See console for details.";
+                console.error("Sync error:", error);
             } finally {
                 setTimeout(() => { isUpdatingLocally = false; }, 1500);
             }
@@ -57,28 +64,34 @@
 
         // 2. Poll the Google Sheet every 3 seconds to catch external changes
         async function pollSheet() {
-            if (isUpdatingLocally) return;
+            if (isUpdatingLocally) return; // Skip polling while user is actively interacting
+
             try {
                 const response = await fetch(`${webAppUrl}?t=${new Date().getTime()}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
-                
+
                 if (data && data.value) {
                     const selectElement = document.getElementById('userSelection');
                     const mirrorDiv = document.getElementById('mirror');
-                    
+
                     if (selectElement.value !== data.value) {
                         selectElement.value = data.value;
+                        mirrorDiv.innerText = `Current Choice: ${data.value}`;
+                    } else {
                         mirrorDiv.innerText = `Current Choice: ${data.value}`;
                     }
                 }
             } catch (error) {
                 console.error("Polling error: ", error);
+                document.getElementById('status').style.color = "red";
+                document.getElementById('status').innerText = "Could not reach sheet.";
             }
         }
 
-        // Run poll immediately on load, then every 3 seconds
         pollSheet();
         setInterval(pollSheet, 3000);
     </script>
+
 </body>
 </html>
