@@ -1,143 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Real-Time Google Sheet Sync</title>
-
-<style>
-body{
-    font-family:Arial,sans-serif;
-    text-align:center;
-    margin-top:60px;
-}
-
-select{
-    padding:10px;
-    font-size:18px;
-}
-
-#mirror{
-    font-size:22px;
-    font-weight:bold;
-    color:#0066cc;
-    margin-bottom:20px;
-}
-
-#status{
-    margin-top:20px;
-    font-weight:bold;
-}
-</style>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Google Sheet Sync</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        select { padding: 10px; font-size: 18px; margin: 10px; cursor: pointer; }
+        #status { margin-top: 20px; font-weight: bold; font-size: 16px; }
+        #mirror { font-size: 20px; color: #0066cc; margin-bottom: 20px; font-weight: bold; }
+    </style>
 </head>
 <body>
+    <h2>Real-Time Google Sheet Sync</h2>
+    
+    <div id="mirror">Current Status: Loading...</div>
+    
+    <select id="userSelection" onchange="sendUpdate()">
+        <option value="Option 1">Option 1</option>
+        <option value="Option 2">Option 2</option>
+    </select>
+    
+    <div id="status"></div>
 
-<h2>Google Sheet Sync</h2>
+    <script>
+        // ========== PASTE YOUR NEW WEB APP URL HERE ==========
+        const webAppUrl = "https://script.google.com/macros/s/AKfycbz2IvN6LPGUDhfsmDi_vTg0G77uqCqcFJ_k7Q6WC3EbDsKISHs8TozTxVkdp1UWB1_5Kw/exec";
+        // =====================================================
 
-<div id="mirror">Loading...</div>
+        let isUpdatingLocally = false;
 
-<select id="userSelection">
-    <option value="Option 1">Option 1</option>
-    <option value="Option 2">Option 2</option>
-</select>
+        // 1. Send update to Google Sheet instantly when user changes dropdown
+        async function sendUpdate() {
+            const selectedValue = document.getElementById('userSelection').value;
+            const statusDiv = document.getElementById('status');
+            const mirrorDiv = document.getElementById('mirror');
+            
+            isUpdatingLocally = true;
+            statusDiv.style.color = "black";
+            statusDiv.innerText = "Syncing with sheet...";
+            mirrorDiv.innerText = `Current Choice: ${selectedValue}`;
 
-<div id="status"></div>
-
-<script>
-
-const webAppUrl = "https://script.google.com/macros/library/d/1T68jOGloBGyZ_UuSi2wkBfBlqBgD72L7h1mwil9DNeyGzCnTq6vH8Br2/5";
-
-const select = document.getElementById("userSelection");
-const mirror = document.getElementById("mirror");
-const status = document.getElementById("status");
-
-let updating = false;
-
-select.addEventListener("change", sendUpdate);
-
-async function sendUpdate(){
-
-    updating = true;
-
-    const value = select.value;
-
-    mirror.textContent = "Current Choice: " + value;
-    status.style.color = "black";
-    status.textContent = "Syncing...";
-
-    try{
-
-        const response = await fetch(
-            webAppUrl + "?value=" + encodeURIComponent(value)
-        );
-
-        const data = await response.json();
-
-        if(data.success){
-
-            status.style.color = "green";
-            status.textContent = "Synced";
-
-        }else{
-
-            status.style.color = "red";
-            status.textContent = "Failed";
-
-        }
-
-    }catch(e){
-
-        console.error(e);
-
-        status.style.color = "red";
-        status.textContent = "Connection Error";
-
-    }
-
-    setTimeout(()=>{
-        status.textContent="";
-        updating=false;
-    },1000);
-
-}
-
-async function pollSheet(){
-
-    if(updating) return;
-
-    try{
-
-        const response = await fetch(
-            webAppUrl + "?t=" + Date.now()
-        );
-
-        const data = await response.json();
-
-        if(data.success){
-
-            if(select.value !== data.value){
-
-                select.value = data.value;
-
+            try {
+                await fetch(`${webAppUrl}?value=${encodeURIComponent(selectedValue)}`, { mode: 'no-cors' });
+                statusDiv.style.color = "green";
+                statusDiv.innerText = "Synced successfully!";
+                setTimeout(() => { statusDiv.innerText = ""; }, 2000);
+            } catch (error) {
+                statusDiv.style.color = "red";
+                statusDiv.innerText = "Sync failed.";
+                console.error(error);
+            } finally {
+                setTimeout(() => { isUpdatingLocally = false; }, 1500);
             }
-
-            mirror.textContent = "Current Choice: " + data.value;
-
         }
 
-    }catch(e){
+        // 2. Poll the Google Sheet every 3 seconds to catch external changes
+        async function pollSheet() {
+            if (isUpdatingLocally) return;
+            try {
+                const response = await fetch(`${webAppUrl}?t=${new Date().getTime()}`);
+                const data = await response.json();
+                
+                if (data && data.value) {
+                    const selectElement = document.getElementById('userSelection');
+                    const mirrorDiv = document.getElementById('mirror');
+                    
+                    if (selectElement.value !== data.value) {
+                        selectElement.value = data.value;
+                        mirrorDiv.innerText = `Current Choice: ${data.value}`;
+                    }
+                }
+            } catch (error) {
+                console.error("Polling error: ", error);
+            }
+        }
 
-        console.log(e);
-
-    }
-
-}
-
-pollSheet();
-setInterval(pollSheet,1000);
-
-</script>
-
+        // Run poll immediately on load, then every 3 seconds
+        pollSheet();
+        setInterval(pollSheet, 3000);
+    </script>
 </body>
 </html>
