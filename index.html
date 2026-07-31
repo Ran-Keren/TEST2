@@ -3,62 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Update Google Sheet</title>
+    <title>Real-Time Google Sheet Sync</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-        select, button { padding: 10px; font-size: 16px; margin: 10px; }
-        #status { margin-top: 20px; font-weight: bold; }
-        #mirror { font-size: 18px; color: #0066cc; margin-bottom: 20px; }
+        select { padding: 10px; font-size: 18px; margin: 10px; cursor: pointer; }
+        #status { margin-top: 20px; font-weight: bold; font-size: 16px; }
+        #mirror { font-size: 20px; color: #0066cc; margin-bottom: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h2>Select an Option for Google Sheets</h2>
+    <h2>Real-Time Google Sheet Sync</h2>
     
-    <!-- Mirror chosen option live -->
-    <div id="mirror">Current Choice: Option 1</div>
+    <div id="mirror">Current Status: Loading...</div>
 
-    <!-- Hidden iframe to handle communication seamlessly -->
-    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;" onload="handleResponse()"></iframe>
-
-    <!-- Form pointing directly to your Apps Script Web App -->
-    <form id="sheetForm" action="https://script.google.com/macros/s/AKfycbyBFef26t41g035Gy7dl1ks63hMpveuXgpRGgVr6CvsddFAZ7oP33FUd9i748XmhhBRvg/exec" method="GET" target="hidden_iframe" onsubmit="startUpdate()">
-        <select id="userSelection" name="value" onchange="updateMirror()">
-            <option value="Option 1">Option 1</option>
-            <option value="Option 2">Option 2</option>
-        </select>
-        
-        <br>
-        <button type="submit">Update Sheet</button>
-    </form>
+    <!-- Dropdown changes instantly on selection without a button -->
+    <select id="userSelection" onchange="sendUpdate()">
+        <option value="Option 1">Option 1</option>
+        <option value="Option 2">Option 2</option>
+    </select>
     
     <div id="status"></div>
 
     <script>
-        function updateMirror() {
-            const selectElement = document.getElementById('userSelection');
+        const webAppUrl = "https://script.google.com/macros/s/AKfycbyBFef26t41g035Gy7dl1ks63hMpveuXgpRGgVr6CvsddFAZ7oP33FUd9i748XmhhBRvg/exec";
+        let isUpdatingLocally = false;
+
+        // 1. Send update to Google Sheet instantly when user changes dropdown
+        async function sendUpdate() {
+            const selectedValue = document.getElementById('userSelection').value;
+            const statusDiv = document.getElementById('status');
             const mirrorDiv = document.getElementById('mirror');
-            mirrorDiv.innerText = `Current Choice: ${selectElement.value}`;
-        }
-
-        function startUpdate() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.style.color = "black";
-            statusDiv.innerText = "Sending update to Google Sheet...";
-        }
-
-        let isFirstLoad = true;
-        function handleResponse() {
-            if (isFirstLoad) {
-                isFirstLoad = false;
-                return; // Skip the initial iframe load on page start
-            }
-            const statusDiv = document.getElementById('status');
-            const selectElement = document.getElementById('userSelection');
             
-            statusDiv.style.color = "green";
-            statusDiv.innerText = `Success! Cell A1 updated to: ${selectElement.value}`;
+            isUpdatingLocally = true;
+            statusDiv.style.color = "black";
+            statusDiv.innerText = "Syncing with sheet...";
+            mirrorDiv.innerText = `Current Choice: ${selectedValue}`;
+
+            try {
+                await fetch(`${webAppUrl}?value=${encodeURIComponent(selectedValue)}`, { mode: 'no-cors' });
+                statusDiv.style.color = "green";
+                statusDiv.innerText = "Synced successfully!";
+                setTimeout(() => { statusDiv.innerText = ""; }, 2000);
+            } catch (error) {
+                statusDiv.style.color = "red";
+                statusDiv.innerText = "Sync failed.";
+                console.error(error);
+            } finally {
+                // Release local lock shortly after request fires
+                setTimeout(() => { isUpdatingLocally = false; }, 1500);
+            }
         }
+
+        // 2. Poll the Google Sheet every 3 seconds to catch external changes
+        async function pollSheet() {
+            if (isUpdatingLocally) return; // Skip polling while user is actively interacting
+
+            try {
+                // Adding a timestamp parameter prevents browser caching of the fetch request
+                const response = await fetch(`${webAppUrl}?t=${new Date().getTime()}`);
+                const data = await response.json();
+                
+                if (data && data.value) {
+                    const selectElement = document.getElementById('userSelection');
+                    const mirrorDiv = document.getElementById('mirror');
+                    
+                    // If the sheet value differs from what's selected on screen, update the UI
+                    if (selectElement.value !== data.value) {
+                        selectElement.value = data.value;
+                        mirrorDiv.innerText = `Current Choice: ${data.value}`;
+                    }
+                }
+            } catch (error) {
+                console.error("Polling error: ", error);
+            }
+        }
+
+        // Run poll immediately on load, then every 3 seconds
+        pollSheet();
+        setInterval(pollSheet, 3000);
     </script>
 
 </body>
