@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update Google Sheet</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        select, button { padding: 10px; font-size: 16px; margin: 10px; }
+        #status { margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>Select an Option for Google Sheets</h2>
+    
+    <!-- Dropdown matching your 2 options -->
+    <select id="userSelection">
+        <option value="Option 1">Option 1</option>
+        <option value="Option 2">Option 2</option>
+    </select>
+    
+    <br>
+    <button onclick="updateSheet()">Update Sheet</button>
+    
+    <div id="status"></div>
+
+    <script>
+        async function updateSheet() {
+            const selectedValue = document.getElementById('userSelection').value;
+            const statusDiv = document.getElementById('status');
+            
+            // Your Google Apps Script Web App URL
+            const webAppUrl = "https://script.google.com/macros/s/AKfycbyBFef26t41g035Gy7dl1ks63hMpveuXgpRGgVr6CvsddFAZ7oP33FilesIn/exec";
+            
+            statusDiv.style.color = "black";
+            statusDiv.innerText = "Updating...";
+
+            try {
+                const response = await fetch(`${webAppUrl}?value=${encodeURIComponent(selectedValue)}`);
+                const result = await response.json();
+                
+                if (result.status === "success") {
+                    statusDiv.style.color = "green";
+                    statusDiv.innerText = `Success! Cell A1 updated to: ${result.value}`;
+                } else {
+                    statusDiv.style.color = "red";
+                    statusDiv.innerText = "Failed to update.";
+                }
+            } catch (error) {
+                statusDiv.style.color = "red";
+                statusDiv.innerText = "Error connecting to Google Sheet.";
+                console.error(error);
+            }
+        }
+    </script>
+
+</body>
+</html>
